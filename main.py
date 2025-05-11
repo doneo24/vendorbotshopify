@@ -1,4 +1,3 @@
-
 import os
 import telebot
 import openai
@@ -36,13 +35,17 @@ Antworte strukturiert mit:
 ### Bullets:
 ### Meta:
 """
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        result = response.choices[0].message.content
+        bot.send_message(message.chat.id, result[:4000])
 
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    result = response.choices[0].message.content
-    bot.send_message(message.chat.id, result[:4000])  # max. Telegram limit
+    except Exception as e:
+        error_msg = f"Fehler bei der Verarbeitung:\n{str(e)}"
+        bot.send_message(message.chat.id, error_msg)
+        print(f"[Fehler] {str(e)}")
 
 bot.infinity_polling()
