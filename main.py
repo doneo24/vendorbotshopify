@@ -1,20 +1,38 @@
 import os
-import telebot
 import openai
+import telebot
+from flask import Flask, request
 
+# === API-Zugänge ===
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-bot = telebot.TeleBot(BOT_TOKEN)
 openai.api_key = OPENAI_API_KEY
+bot = telebot.TeleBot(BOT_TOKEN)
 
-@bot.message_handler(commands=['start'])
+# === Flask-App für Webhook ===
+app = Flask(__name__)
+
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def receive_update():
+    json_str = request.get_data().decode("UTF-8")
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return "!", 200
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Doneo24 VendorBot läuft!", 200
+
+# === Start-Nachricht ===
+@bot.message_handler(commands=["start"])
 def send_welcome(message):
-    bot.send_message(message.chat.id, "Vendor-Bot ist online. Sende mir einen englischen Produkttitel + Beschreibung.")
+    bot.send_message(message.chat.id, "✅ Vendor-Bot ist online. Sende mir einen englischen Produkttitel + Beschreibung.")
 
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
+# === Verarbeitung der Produkttexte ===
+@bot.message_handler(func=lambda m: True)
+def handle_product(message):
     prompt = f"""
 Du bist ein Shopify-Texter für einen deutschen Onlineshop.
 Erstelle aus folgendem Produkttext:
@@ -42,10 +60,13 @@ Antworte strukturiert mit:
         )
         result = response.choices[0].message.content
         bot.send_message(message.chat.id, result[:4000])
-
     except Exception as e:
-        error_msg = f"Fehler bei der Verarbeitung:\n{str(e)}"
-        bot.send_message(message.chat.id, error_msg)
-        print(f"[Fehler] {str(e)}")
+        bot.send_message(message.chat.id, f"❌ Fehler: {str(e)}")
+        print(f"[FEHLER] {str(e)}")
 
-bot.infinity_polling()
+# === Start der App ===
+if __name__ == "__main__":
+    # Setze Webhook für Telegram
+    bot.remove_webhook()
+    bot.set_webhook(url=f"https://doneo24-vendorbotshopify.onrender.com/{BOT_TOKEN}")
+    app.run(host="0.0.0.0", port=10000)
