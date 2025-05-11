@@ -1,7 +1,10 @@
+# main.py – Kombi aus VendorBot (Text) + ProduktjägerBot
+
 import os
 import openai
 import telebot
 from flask import Flask, request
+import random
 
 # === API-Zugänge ===
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -10,9 +13,38 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 openai.api_key = OPENAI_API_KEY
 bot = telebot.TeleBot(BOT_TOKEN)
-
-# === Flask-App für Webhook ===
 app = Flask(__name__)
+
+# === Produktjäger-Daten (Platzhalter) ===
+produkte = {
+    "beauty": [
+        {
+            "name": "Elektrischer Porensauger",
+            "beschreibung": "Mit 5 Aufsätzen & EU-Lager – Tiefenreinigung für dein Gesicht.",
+            "ek": "6,79 €", "vk": "29,95 €", "marge": "+23,16 €",
+            "lager": "✅ EU (Polen)", "trend": "Hoch",
+            "link": "https://example.com/porensauger"
+        }
+    ],
+    "haushalt": [
+        {
+            "name": "Mini Heat Sealer",
+            "beschreibung": "Wiederverwendbarer Beutelversiegler für Snacks & Küche.",
+            "ek": "4,22 €", "vk": "24,95 €", "marge": "+20,73 €",
+            "lager": "✅ EU (Niederlande)", "trend": "Mittel",
+            "link": "https://example.com/heater"
+        }
+    ],
+    "viral": [
+        {
+            "name": "LED Galaxy Projektor",
+            "beschreibung": "360° Sternenhimmel mit Bluetooth-Sound & Fernbedienung.",
+            "ek": "11,10 €", "vk": "39,95 €", "marge": "+28,85 €",
+            "lager": "✅ EU (Deutschland)", "trend": "Hoch",
+            "link": "https://example.com/galaxy"
+        }
+    ]
+}
 
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def receive_update():
@@ -23,14 +55,37 @@ def receive_update():
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Doneo24 VendorBot läuft!", 200
+    return "Doneo24 VendorBot & Produktjäger aktiv!", 200
 
-# === Start-Nachricht ===
 @bot.message_handler(commands=["start"])
 def send_welcome(message):
-    bot.send_message(message.chat.id, "✅ Vendor-Bot ist online. Sende mir einen englischen Produkttitel + Beschreibung.")
+    bot.send_message(message.chat.id, "✅ Vendor-Bot ist online.\n\nSchick mir einen englischen Produkttitel + Beschreibung für deutschen Verkaufstext.\nOder starte die Produktsuche mit: /jagd beauty | haushalt | viral | all")
 
-# === Verarbeitung der Produkttexte ===
+@bot.message_handler(commands=["jagd"])
+def jagd(message):
+    args = message.text.split(" ")
+    if len(args) < 2:
+        bot.send_message(message.chat.id, "Bitte gib eine Kategorie an: /jagd beauty | haushalt | viral | all")
+        return
+
+    kategorie = args[1].lower()
+    if kategorie == "all":
+        alle = sum(produkte.values(), [])
+        produkt = random.choice(alle)
+    elif kategorie in produkte:
+        produkt = random.choice(produkte[kategorie])
+    else:
+        bot.send_message(message.chat.id, "Ungültige Kategorie. Wähle: beauty | haushalt | viral | all")
+        return
+
+    text = f"**Produktvorschlag: {produkt['name']}**\n"
+    text += f"{produkt['beschreibung']}\n"
+    text += f"EK: {produkt['ek']}   VK: {produkt['vk']}   Marge: {produkt['marge']}\n"
+    text += f"Lager: {produkt['lager']}\n"
+    text += f"TikTok-Trend: {produkt['trend']}\n"
+    text += f"Link: {produkt['link']}"
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
 @bot.message_handler(func=lambda m: True)
 def handle_product(message):
     prompt = f"""
@@ -64,9 +119,7 @@ Antworte strukturiert mit:
         bot.send_message(message.chat.id, f"❌ Fehler: {str(e)}")
         print(f"[FEHLER] {str(e)}")
 
-# === Start der App ===
 if __name__ == "__main__":
-    # Setze Webhook für Telegram
     bot.remove_webhook()
     bot.set_webhook(url=f"https://doneo24-vendorbotshopify.onrender.com/{BOT_TOKEN}")
     app.run(host="0.0.0.0", port=10000)
